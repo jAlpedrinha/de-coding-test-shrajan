@@ -9,7 +9,7 @@ object ProcessDataFile {
   // Case class to represent a journey
   private case class Journey(journeyId: String, driverId: String, startTime: Long, endTime: Long,
                              startLat: Double, startLon: Double, endLat: Double, endLon: Double,
-                             startOdometer: Long, endOdometer: Long)
+                             startOdometer: Double, endOdometer: Double)
 
   def main(args: Array[String]) = {
 
@@ -41,49 +41,63 @@ object ProcessDataFile {
     val longJourneys = getJourneyDuration(journeys)
 
     println("Journeys of 90 minutes or more.")
-    longJourneys.foreach(journey => println(journey.toString))
+    longJourneys.foreach(journey => println(s"journeyId: ${journey.journeyId} ${journey.driverId} distance ${journey.endOdometer - journey.startOdometer}" +
+      s" durationMS ${journey.endTime - journey.startTime}"))
 
     // 2. Find the average speed per journey in kph.
+    println(s"\nAverage speeds in Kph")
     calculateAverageSpeed(journeys)
 
     // 3. Find the total mileage by driver for the whole day.
     totalMileagePerDriver(journeys)
 
-    // This part is the last part of the puzzle
-    // This jira was a little bit unclear.
-    // I assume that most active driver means the driver who drove the most mileage
-    // for all of the journeys.
-    // we somehow need to
     // 4. Find the most active driver - the driver who has driven the most kilometers.
+    mostActiveDriver(journeys)
 
   }
 
   private def getJourneyDuration(journeys: List[Journey]): List[Journey] = {
     // 1. Find journeys that are 90 minutes or more.
-    return journeys.filter(journey => (journey.endTime - journey.startTime) >= 90 * 1000 * 60)
+    val validJourneys = journeys.filter(journey => journey.endOdometer >= journey.startOdometer)
+    validJourneys.filter(journey => (journey.endTime - journey.startTime) >= 90 * 1000 * 60)
   }
 
   private def calculateAverageSpeed(journeys: List[Journey]): Unit = {
-    journeys.foreach(journey => {
+    val validJourneys = journeys.filter(journey => journey.endOdometer >= journey.startOdometer)
+    validJourneys.foreach(journey => {
       val durationInHours = (journey.endTime - journey.startTime) / (1000.0 * 60.0 * 60.0)
-      val distance = journey.endOdometer - journey.startOdometer
-      val averageSpeed = distance / durationInHours
-      println(s"Journey ${journey.journeyId}: Driver Id = ${journey.driverId} : Average speed = $averageSpeed kph : " +
-        s"Distance = $distance")
+      if (durationInHours > 0) {
+        val distance = journey.endOdometer - journey.startOdometer
+        val averageSpeed = distance / durationInHours
+        println(s"Journey ${journey.journeyId}: Driver Id = ${journey.driverId} : Average speed = $averageSpeed kph : " +
+          s"Distance = $distance")
+      }
     })
   }
 
+  private def mostActiveDriver(journeys: List[Journey]): Unit = {
+    val totalMileagePerDriver: scala.collection.mutable.HashMap[String, Double] = getTotalMileage(journeys)
+    val mostActiveDriver = totalMileagePerDriver.maxBy(x => x._2)
+    print(s"\nMost Active Driver is  ${mostActiveDriver._1}")
+  }
+
   private def totalMileagePerDriver(journeys: List[Journey]): Unit = {
-    val totalMileagePerDriver: mutable.HashMap[String, Long] = scala.collection.mutable.HashMap.empty
-    for (journey <- journeys) {
-      val driverId = journey.driverId
-      val totalMileage = journey.endOdometer - journey.startOdometer
-      totalMileagePerDriver.put(driverId, totalMileagePerDriver.getOrElse(driverId, 0L) + totalMileage)
-    }
-    println("Total Mileage by Driver:")
+    val totalMileagePerDriver: scala.collection.mutable.HashMap[String, Double] = getTotalMileage(journeys)
+    println("\nMileage by Driver:")
     totalMileagePerDriver.foreach { case (driver, mileage) =>
       println(s"$driver : $mileage")
     }
+  }
+
+  private def getTotalMileage(journeys: List[Journey]) = {
+    val totalMileagePerDriver: mutable.HashMap[String, Double] = scala.collection.mutable.HashMap.empty
+    val validJourneys = journeys.filter(journey => journey.endOdometer >= journey.startOdometer)
+    for (journey <- validJourneys) {
+      val driverId = journey.driverId
+      val totalMileage = journey.endOdometer - journey.startOdometer
+      totalMileagePerDriver.put(driverId, totalMileagePerDriver.getOrElse(driverId, 0.0) + totalMileage)
+    }
+    totalMileagePerDriver
   }
 
   // Function to parse a CSV line into a Journey case class
